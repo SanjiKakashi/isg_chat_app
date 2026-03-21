@@ -45,6 +45,7 @@ class ChatController extends GetxController {
     _user = Get.find<AuthController>().currentUser.value!;
     _listenConversations();
     _loadOrCreateConversation();
+    ever(Get.find<AuthController>().currentUser, _onUserChanged);
   }
 
   @override
@@ -61,6 +62,19 @@ class ChatController extends GetxController {
     _conversationsSub = _repo
         .watchConversations(_user.uid)
         .listen((list) => conversations.assignAll(list));
+  }
+
+  /// Re-subscribes Firestore streams when the UID changes after account linking.
+  void _onUserChanged(UserProfile? newUser) {
+    if (newUser == null || newUser.uid == _user.uid) return;
+    _user = newUser;
+    _conversationsSub?.cancel();
+    _messagesSub?.cancel();
+    conversationId.value = '';
+    messages.clear();
+    _listenConversations();
+    unawaited(_loadOrCreateConversation());
+    AppLogger.instance.i('ChatController: UID changed to ${newUser.uid}');
   }
 
   /// On startup: loads the most recent existing conversation.

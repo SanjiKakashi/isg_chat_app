@@ -6,6 +6,9 @@ import 'package:isg_chat_app/core/utils/app_logger.dart';
 import 'package:isg_chat_app/data/repositories/auth_repository_impl.dart';
 import 'package:isg_chat_app/domain/entities/user_profile.dart';
 import 'package:isg_chat_app/domain/usecases/get_current_user_usecase.dart';
+import 'package:isg_chat_app/domain/usecases/link_with_apple_usecase.dart';
+import 'package:isg_chat_app/domain/usecases/link_with_google_usecase.dart';
+import 'package:isg_chat_app/domain/usecases/sign_in_anonymously_usecase.dart';
 import 'package:isg_chat_app/domain/usecases/sign_in_with_apple_usecase.dart';
 import 'package:isg_chat_app/domain/usecases/sign_in_with_google_usecase.dart';
 import 'package:isg_chat_app/routes/app_routes.dart';
@@ -16,15 +19,25 @@ class AuthController extends GetxController {
     required SignInWithGoogleUseCase signInWithGoogleUseCase,
     required SignInWithAppleUseCase signInWithAppleUseCase,
     required GetCurrentUserUseCase getCurrentUserUseCase,
+    required SignInAnonymouslyUseCase signInAnonymouslyUseCase,
+    required LinkWithGoogleUseCase linkWithGoogleUseCase,
+    required LinkWithAppleUseCase linkWithAppleUseCase,
   })  : _signInWithGoogle = signInWithGoogleUseCase,
         _signInWithApple = signInWithAppleUseCase,
-        _getCurrentUser = getCurrentUserUseCase;
+        _getCurrentUser = getCurrentUserUseCase,
+        _signInAnonymously = signInAnonymouslyUseCase,
+        _linkWithGoogle = linkWithGoogleUseCase,
+        _linkWithApple = linkWithAppleUseCase;
 
   final SignInWithGoogleUseCase _signInWithGoogle;
   final SignInWithAppleUseCase _signInWithApple;
   final GetCurrentUserUseCase _getCurrentUser;
+  final SignInAnonymouslyUseCase _signInAnonymously;
+  final LinkWithGoogleUseCase _linkWithGoogle;
+  final LinkWithAppleUseCase _linkWithApple;
 
   final RxBool isLoading = false.obs;
+  final RxBool isLinking = false.obs;
   final Rxn<UserProfile> currentUser = Rxn<UserProfile>();
 
   /// Ensures [_checkSession] runs only once per app lifecycle.
@@ -41,6 +54,18 @@ class AuthController extends GetxController {
   Future<void> signInWithGoogle() async => _performSignIn(() => _signInWithGoogle.execute());
 
   Future<void> signInWithApple() async => _performSignIn(() => _signInWithApple.execute());
+
+  Future<void> signInAnonymously() async => _performSignIn(() => _signInAnonymously.execute());
+
+  Future<void> linkWithGoogle() async {
+    final guestUid = currentUser.value!.uid;
+    await _performLink(() => _linkWithGoogle.execute(guestUid: guestUid));
+  }
+
+  Future<void> linkWithApple() async {
+    final guestUid = currentUser.value!.uid;
+    await _performLink(() => _linkWithApple.execute(guestUid: guestUid));
+  }
 
   /// Signs out and returns to the login screen.
   Future<void> signOut() async {
@@ -100,6 +125,36 @@ class AuthController extends GetxController {
       _showError('Something went wrong. Please try again.');
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  Future<void> _performLink(
+    Future<({UserProfile? profile, Failure? failure})> Function() link,
+  ) async {
+    isLinking.value = true;
+    try {
+      final result = await link();
+
+      if (result.failure is CancelledFailure) return;
+
+      if (result.profile == null) {
+        _showError(result.failure?.message ?? 'Linking failed.');
+        return;
+      }
+
+      currentUser.value = result.profile;
+      Get.back<void>();
+      Get.snackbar(
+        'Account linked',
+        'Your chat history has been transferred.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 4),
+      );
+    } on Exception catch (e) {
+      AppLogger.instance.e('_performLink error', error: e);
+      _showError('Something went wrong. Please try again.');
+    } finally {
+      isLinking.value = false;
     }
   }
 

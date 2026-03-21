@@ -24,8 +24,11 @@ class UserProfile {
   /// Incremented by the Chat feature; initialised to 0 on first login.
   final int totalConversations;
 
+  /// True when the user is signed in anonymously.
+  bool get isGuest => provider == 'anonymous';
+
   /// Display name with fallback.
-  String get nameOrFallback => displayName ?? 'User';
+  String get nameOrFallback => isGuest ? 'Guest' : (displayName ?? 'User');
 
   @override
   String toString() =>

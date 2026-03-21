@@ -9,6 +9,19 @@ abstract class AuthRepository {
   /// Signs in with Apple (iOS only). Returns [CancelledFailure] on dismiss.
   Future<({UserProfile? profile, Failure? failure})> signInWithApple();
 
+  /// Signs in anonymously (guest mode).
+  Future<({UserProfile? profile, Failure? failure})> signInAnonymously();
+
+  /// Links a guest account to Google, migrating chat history.
+  Future<({UserProfile? profile, Failure? failure})> linkWithGoogle({
+    required String guestUid,
+  });
+
+  /// Links a guest account to Apple (iOS only), migrating chat history.
+  Future<({UserProfile? profile, Failure? failure})> linkWithApple({
+    required String guestUid,
+  });
+
   /// Returns the current user session, or null.
   Future<UserProfile?> getCurrentUser();
 

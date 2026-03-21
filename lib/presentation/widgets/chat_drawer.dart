@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:isg_chat_app/core/theme/app_theme.dart';
@@ -14,24 +16,27 @@ class ChatDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = Get.find<AuthController>();
-    final user = auth.currentUser.value;
 
     return Drawer(
       backgroundColor: AppTheme.backgroundCard,
-      child: Column(
-        children: [
-          _DrawerHeader(
-            displayName: user?.nameOrFallback ?? 'User',
-            email: user?.email ?? '',
-            photoUrl: user?.photoUrl,
-          ),
-          _NewChatButton(onTap: controller.startNewConversation),
-          const Divider(color: AppTheme.divider, height: 1),
-          Expanded(child: _ConversationList(controller: controller)),
-          const Divider(color: AppTheme.divider, height: 1),
-          _SignOutTile(onTap: auth.signOut),
-        ],
-      ),
+      child: Obx(() {
+        final user = auth.currentUser.value;
+        return Column(
+          children: [
+            _DrawerHeader(
+              displayName: user?.nameOrFallback ?? 'User',
+              email: user?.email ?? '',
+              photoUrl: user?.photoUrl,
+            ),
+            _NewChatButton(onTap: controller.startNewConversation),
+            if (user?.isGuest ?? false) _LinkAccountSection(auth: auth),
+            const Divider(color: AppTheme.divider, height: 1),
+            Expanded(child: _ConversationList(controller: controller)),
+            const Divider(color: AppTheme.divider, height: 1),
+            _SignOutTile(onTap: auth.signOut),
+          ],
+        );
+      }),
     );
   }
 }
@@ -271,6 +276,77 @@ class _SignOutTile extends StatelessWidget {
         style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
       ),
     );
+  }
+}
+
+class _LinkAccountSection extends StatelessWidget {
+  const _LinkAccountSection({required this.auth});
+
+  final AuthController auth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final linking = auth.isLinking.value;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, 4),
+            child: Text(
+              'UPGRADE ACCOUNT',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          ListTile(
+            enabled: !linking,
+            onTap: linking ? null : auth.linkWithGoogle,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+            leading: linking
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primary,
+                    ),
+                  )
+                : const Icon(
+                    Icons.account_circle_rounded,
+                    color: AppTheme.primary,
+                    size: 20,
+                  ),
+            title: const Text(
+              'Link with Google',
+              style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+            ),
+          ),
+          if (Platform.isIOS)
+            ListTile(
+              enabled: !linking,
+              onTap: linking ? null : auth.linkWithApple,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+              leading: const Icon(
+                Icons.apple_rounded,
+                color: AppTheme.textPrimary,
+                size: 20,
+              ),
+              title: const Text(
+                'Link with Apple',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
+      );
+    });
   }
 }
 
