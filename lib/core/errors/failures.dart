@@ -23,3 +23,16 @@ class CancelledFailure extends Failure {
 class NetworkFailure extends Failure {
   const NetworkFailure() : super('No internet connection. Please try again.');
 }
+
+/// Failure — carries the HTTP [statusCode] for precise handling.
+class AiFailure extends Failure {
+  const AiFailure(super.message, {required this.statusCode});
+
+  /// The raw HTTP status code returned by the API.
+  final int statusCode;
+
+  bool get isRateLimit => statusCode == 429;
+  bool get isUnauthorised => statusCode == 401;
+  bool get isServerError => statusCode >= 500;
+}
+

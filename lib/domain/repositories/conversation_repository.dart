@@ -1,8 +1,15 @@
 import 'package:isg_chat_app/domain/entities/chat_message.dart';
+import 'package:isg_chat_app/domain/entities/conversation.dart';
 
 /// Abstract contract for conversation and message operations.
 abstract class ConversationRepository {
-  /// Returns a live stream of messages for [conversationId], ordered by timestamp.
+  /// Live stream of all conversations for [userId], newest first.
+  Stream<List<Conversation>> watchConversations(String userId);
+
+  /// One-shot fetch of all conversations, newest first.
+  Future<List<Conversation>> fetchConversations(String userId);
+
+  /// Live stream of messages for [conversationId], ordered by timestamp.
   Stream<List<ChatMessage>> watchMessages(String userId, String conversationId);
 
   /// Adds a message document and returns its generated ID.

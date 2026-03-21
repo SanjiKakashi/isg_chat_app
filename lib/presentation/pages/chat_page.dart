@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:isg_chat_app/core/theme/app_theme.dart';
-import 'package:isg_chat_app/presentation/controllers/auth_controller.dart';
 import 'package:isg_chat_app/presentation/controllers/chat_controller.dart';
+import 'package:isg_chat_app/presentation/widgets/chat_drawer.dart';
 import 'package:isg_chat_app/presentation/widgets/chat_input_bar.dart';
 import 'package:isg_chat_app/presentation/widgets/message_bubble.dart';
 
@@ -13,41 +13,49 @@ class ChatPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chat = Get.find<ChatController>();
-    final auth = Get.find<AuthController>();
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
+      drawer: ChatDrawer(controller: chat),
       appBar: AppBar(
         backgroundColor: AppTheme.backgroundCard,
         elevation: 0,
-        title: Obx(
-          () => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'ISG Chat',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 17,
-                ),
-              ),
-              if (chat.conversationId.value.isNotEmpty)
-                Text(
-                  'ID: ${chat.conversationId.value.substring(0, 8)}…',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-            ],
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu_rounded, color: AppTheme.textSecondary),
+            tooltip: 'History',
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
+        title: Obx(() => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'ISG Chat',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            if (chat.conversationId.value.isNotEmpty)
+              Text(
+                '#${chat.conversationId.value.substring(0, 8)}',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+          ],
+        )),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded, color: AppTheme.textSecondary),
-            tooltip: 'Sign out',
-            onPressed: auth.signOut,
+            icon: const Icon(Icons.add_comment_rounded, color: AppTheme.textSecondary),
+            tooltip: 'New conversation',
+            onPressed: () {
+              Scaffold.of(context).openDrawer();
+              chat.startNewConversation();
+            },
           ),
         ],
       ),

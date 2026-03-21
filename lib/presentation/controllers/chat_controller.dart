@@ -3,34 +3,39 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:isg_chat_app/core/constants/app_constants.dart';
+import 'package:isg_chat_app/core/errors/failures.dart';
 import 'package:isg_chat_app/core/utils/app_logger.dart';
 import 'package:isg_chat_app/domain/entities/chat_message.dart';
+import 'package:isg_chat_app/domain/entities/conversation.dart';
 import 'package:isg_chat_app/domain/entities/user_profile.dart';
+import 'package:isg_chat_app/domain/repositories/ai_repository.dart';
 import 'package:isg_chat_app/domain/repositories/conversation_repository.dart';
-import 'package:isg_chat_app/domain/repositories/openai_repository.dart';
 import 'package:isg_chat_app/presentation/controllers/auth_controller.dart';
 
 /// Manages chat state: conversation lifecycle, message stream, and send/cancel.
 class ChatController extends GetxController {
   ChatController({
     required ConversationRepository conversationRepository,
-    required OpenAiRepository openAiRepository,
+    required AiRepository aiRepository,
   })  : _repo = conversationRepository,
-        _ai = openAiRepository;
+        _ai = aiRepository;
 
   final ConversationRepository _repo;
-  final OpenAiRepository _ai;
+  final AiRepository _ai;
 
   final TextEditingController inputController = TextEditingController();
   final RxList<ChatMessage> messages = <ChatMessage>[].obs;
+  final RxList<Conversation> conversations = <Conversation>[].obs;
   final RxBool isGenerating = false.obs;
   final RxString conversationId = ''.obs;
 
   StreamSubscription<List<ChatMessage>>? _messagesSub;
   StreamSubscription<String>? _aiStreamSub;
+  StreamSubscription<List<Conversation>>? _conversationsSub;
 
   /// ID of the AI message document currently being streamed.
   String? _pendingAiMessageId;
+
 
   late UserProfile _user;
 
@@ -38,24 +43,50 @@ class ChatController extends GetxController {
   void onInit() {
     super.onInit();
     _user = Get.find<AuthController>().currentUser.value!;
-    _initConversation();
+    _listenConversations();
+    _loadOrCreateConversation();
   }
 
   @override
   void onClose() {
     _messagesSub?.cancel();
     _aiStreamSub?.cancel();
+    _conversationsSub?.cancel();
     inputController.dispose();
     super.onClose();
   }
 
-  Future<void> _initConversation() async {
+  void _listenConversations() {
+    _conversationsSub?.cancel();
+    _conversationsSub = _repo
+        .watchConversations(_user.uid)
+        .listen((list) => conversations.assignAll(list));
+  }
+
+  /// On startup: loads the most recent existing conversation.
+  /// Only creates a new one when the user has no conversations at all.
+  Future<void> _loadOrCreateConversation() async {
+    try {
+      final existing = await _repo.fetchConversations(_user.uid);
+      if (existing.isNotEmpty) {
+        conversationId.value = existing.first.id;
+        _listenMessages();
+      } else {
+        await _createAndOpenConversation();
+      }
+    } on Exception catch (e) {
+      AppLogger.instance.e('_loadOrCreateConversation failed', error: e);
+    }
+  }
+
+  /// Creates a brand-new conversation document and starts listening to it.
+  Future<void> _createAndOpenConversation() async {
     try {
       final id = await _repo.createConversation(_user.uid);
       conversationId.value = id;
       _listenMessages();
     } on Exception catch (e) {
-      AppLogger.instance.e('_initConversation failed', error: e);
+      AppLogger.instance.e('_createAndOpenConversation failed', error: e);
     }
   }
 
@@ -64,6 +95,33 @@ class ChatController extends GetxController {
     _messagesSub = _repo
         .watchMessages(_user.uid, conversationId.value)
         .listen((msgs) => messages.assignAll(msgs));
+  }
+
+  /// Switches the active conversation to [id] and closes the drawer.
+  Future<void> loadConversation(String id) async {
+    if (conversationId.value == id) {
+      Get.back<void>();
+      return;
+    }
+    await _aiStreamSub?.cancel();
+    _aiStreamSub = null;
+    _pendingAiMessageId = null;
+    isGenerating.value = false;
+    messages.clear();
+    conversationId.value = id;
+    _listenMessages();
+    Get.back<void>();
+  }
+
+  /// Creates a fresh conversation and closes the drawer.
+  Future<void> startNewConversation() async {
+    await _aiStreamSub?.cancel();
+    _aiStreamSub = null;
+    _pendingAiMessageId = null;
+    isGenerating.value = false;
+    messages.clear();
+    Get.back<void>();
+    await _createAndOpenConversation();
   }
 
   /// Adds the user message to Firestore, creates an AI placeholder, then
@@ -85,6 +143,7 @@ class ChatController extends GetxController {
         status: AppConstants.statusSent,
       );
 
+
       _pendingAiMessageId = await _repo.addMessage(
         userId: _user.uid,
         conversationId: conversationId.value,
@@ -94,9 +153,12 @@ class ChatController extends GetxController {
       );
 
       await _streamAiResponse();
+    } on AiFailure catch (e) {
+      AppLogger.instance.e('sendMessage AI error ${e.statusCode}', error: e);
+      await _markAiFailed(e.message);
     } on Exception catch (e) {
       AppLogger.instance.e('sendMessage failed', error: e);
-      await _markAiFailed();
+      await _markAiFailed(null);
     }
   }
 
@@ -125,8 +187,6 @@ class ChatController extends GetxController {
 
   /// Opens the OpenAI SSE stream, accumulates chunks, and writes each
   /// partial update back to the Firestore AI message document.
-  /// The Firestore stream listener in [_listenMessages] propagates every
-  /// write to the UI automatically.
   Future<void> _streamAiResponse() async {
     final buffer = StringBuffer();
     final completer = Completer<void>();
@@ -134,9 +194,7 @@ class ChatController extends GetxController {
     _aiStreamSub = _ai.streamCompletion(messages.toList()).listen(
       (chunk) async {
         if (_pendingAiMessageId == null) return;
-
         buffer.write(chunk);
-
         try {
           await _repo.updateMessage(
             userId: _user.uid,
@@ -167,10 +225,13 @@ class ChatController extends GetxController {
         isGenerating.value = false;
         completer.complete();
       },
-      onError: (Object e) async {
-        AppLogger.instance.e('AI stream error', error: e);
-        await _markAiFailed();
-        if (!completer.isCompleted) completer.completeError(e);
+      onError: (Object error) async {
+        final message = error is AiFailure
+            ? error.message
+            : 'Something went wrong. Please try again.';
+        AppLogger.instance.e('AI stream error', error: error);
+        await _markAiFailed(message);
+        if (!completer.isCompleted) completer.complete();
       },
       cancelOnError: true,
     );
@@ -178,15 +239,18 @@ class ChatController extends GetxController {
     await completer.future;
   }
 
-  Future<void> _markAiFailed() async {
+  /// Writes [message] (or a default) into the pending AI document and marks
+  /// it as cancelled so the stream surfaces it in the chat bubble.
+  Future<void> _markAiFailed(String? message) async {
     if (_pendingAiMessageId == null) return;
+    final text = message ?? 'Something went wrong. Please try again.';
     try {
       await _repo.updateMessage(
         userId: _user.uid,
         conversationId: conversationId.value,
         messageId: _pendingAiMessageId!,
         status: AppConstants.statusCancelled,
-        message: 'Something went wrong. Please try again.',
+        message: text,
       );
     } on Exception catch (e) {
       AppLogger.instance.e('_markAiFailed write error', error: e);

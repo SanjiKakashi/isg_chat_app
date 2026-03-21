@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isg_chat_app/core/constants/app_constants.dart';
 import 'package:isg_chat_app/core/utils/app_logger.dart';
+import 'package:isg_chat_app/data/models/conversation_model.dart';
 import 'package:isg_chat_app/data/models/message_model.dart';
 import 'package:isg_chat_app/data/sources/remote/firestore_service.dart';
 import 'package:uuid/uuid.dart';
@@ -13,34 +14,45 @@ class ConversationRemoteSource {
   final FirestoreService _firestore;
   final _uuid = const Uuid();
 
-  /// Returns a [CollectionReference] for messages under [conversationId].
+  CollectionReference<Map<String, dynamic>> _conversationsRef(String userId) =>
+      _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(userId)
+          .collection(AppConstants.conversationsCollection);
+
   CollectionReference<Map<String, dynamic>> _messagesRef(
     String userId,
     String conversationId,
   ) =>
-      _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(userId)
-          .collection(AppConstants.conversationsCollection)
+      _conversationsRef(userId)
           .doc(conversationId)
           .collection(AppConstants.messagesCollection);
 
-  /// Returns a live-updating stream of messages ordered by timestamp.
+  /// Live stream of all conversations for [userId], newest first.
+  /// Sorted client-side to avoid a composite Firestore index requirement.
+  Stream<List<ConversationModel>> watchConversations(String userId) =>
+      _conversationsRef(userId).snapshots().map(
+            (snap) {
+              final docs = snap.docs
+                  .map((doc) => ConversationModel.fromJson(doc.id, doc.data()))
+                  .toList();
+              docs.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+              return docs;
+            },
+          );
+
+  /// Live stream of messages for [conversationId], ordered by timestamp.
   Stream<List<MessageModel>> watchMessages(
-    String userId,
-    String conversationId,
-  ) {
-    return _messagesRef(userId, conversationId)
-        .orderBy(AppConstants.fieldTimestamp)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map(
-                (doc) => MessageModel.fromJson(doc.id, conversationId, doc.data()),
-              )
-              .toList(),
-        );
-  }
+          String userId, String conversationId) =>
+      _messagesRef(userId, conversationId)
+          .orderBy(AppConstants.fieldTimestamp)
+          .snapshots()
+          .map(
+            (snap) => snap.docs
+                .map((doc) =>
+                    MessageModel.fromJson(doc.id, conversationId, doc.data()))
+                .toList(),
+          );
 
   /// Adds a message document and returns its new ID.
   Future<String> addMessage({
@@ -78,22 +90,26 @@ class ConversationRemoteSource {
     await _messagesRef(userId, conversationId).doc(messageId).update(data);
   }
 
-  /// Creates a conversation document under users/{userId}/conversations.
+  /// One-shot fetch of all conversations, newest first.
+  Future<List<ConversationModel>> fetchConversations(String userId) async {
+    final snap = await _conversationsRef(userId).get();
+    final docs = snap.docs
+        .map((doc) => ConversationModel.fromJson(doc.id, doc.data()))
+        .toList();
+    docs.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+    return docs;
+  }
+
+  /// Creates a conversation document and returns its ID.
   Future<String> createConversation(String userId) async {
     final conversationId = _uuid.v4();
     final now = Timestamp.now();
-    await _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(userId)
-        .collection(AppConstants.conversationsCollection)
-        .doc(conversationId)
-        .set({
+    await _conversationsRef(userId).doc(conversationId).set({
       AppConstants.fieldCreatedAt: now,
-      AppConstants.fieldLastLoginAt: now,
+      AppConstants.fieldLastMessageAt: now,
       AppConstants.fieldUid: userId,
     });
     AppLogger.instance.i('Conversation created: $conversationId');
     return conversationId;
   }
 }
-

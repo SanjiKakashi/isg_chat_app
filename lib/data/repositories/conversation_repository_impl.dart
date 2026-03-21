@@ -1,6 +1,7 @@
 import 'package:isg_chat_app/core/utils/app_logger.dart';
 import 'package:isg_chat_app/data/sources/remote/conversation_remote_source.dart';
 import 'package:isg_chat_app/domain/entities/chat_message.dart';
+import 'package:isg_chat_app/domain/entities/conversation.dart';
 import 'package:isg_chat_app/domain/repositories/conversation_repository.dart';
 
 /// Firestore implementation of [ConversationRepository].
@@ -9,6 +10,18 @@ class ConversationRepositoryImpl implements ConversationRepository {
       : _remote = remoteSource;
 
   final ConversationRemoteSource _remote;
+
+  @override
+  Stream<List<Conversation>> watchConversations(String userId) =>
+      _remote
+          .watchConversations(userId)
+          .map((models) => models.map((m) => m.toEntity()).toList());
+
+  @override
+  Future<List<Conversation>> fetchConversations(String userId) async {
+    final models = await _remote.fetchConversations(userId);
+    return models.map((m) => m.toEntity()).toList();
+  }
 
   @override
   Stream<List<ChatMessage>> watchMessages(

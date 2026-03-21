@@ -29,6 +29,8 @@ class AppConstants {
   static const String fieldTimestamp = 'timestamp';
   static const String fieldStatus = 'status';
 
+  static const String fieldLastMessageAt = 'lastMessageAt';
+
   // Message status values
   static const String statusSent = 'sent';
   static const String statusGenerating = 'generating';
@@ -40,4 +42,8 @@ class AppConstants {
 
   static const String providerGoogle = 'google';
   static const String providerApple = 'apple';
+
+  static const String configCollection = 'config';
+  static const String configOpenAiDoc = 'openai';
+  static const String fieldApiKey = 'apiKey';
 }
