@@ -1,6 +1,47 @@
 # ISG Chat App
 
-A Flutter ChatGPT wrapper using Firebase, GetX, and SOLID principles.
+A Flutter ChatGPT wrapper using Firebase, GetX, and SOLID principles. It includes authentication, chat functionality, and basic user session handling.
+---
+
+## ✅ Completed Features
+
+- Guest Login
+- Google Sign-In
+- Apple Sign-In
+- Chat Screen UI
+- Conversation History (Drawer)
+- Logout Functionality
+
+---
+## ⚠️ Known Limitations
+
+- iOS testing not completed  
+  (Reason: No access to MacBook or iPhone)
+
+- Unit testing not implemented
+
+- GPT model limited to **3.5**
+    - Due to cost constraints
+    - Current usage is restricted to a **$5 API limit**
+    - Higher models (like GPT-4/5) were not used to avoid exceeding budget
+
+---
+
+## 🛠️ TODO / Improvements
+
+- Edit message and regenerate response
+- Retry / Stop generation actions
+- Prompt suggestions or system prompts
+- Dark mode support
+- Responsive layout improvements
+
+---
+
+### Prerequisites
+
+- Flutter SDK installed
+- Android Studio / VS Code
+- Xcode (for iOS - optional)
 
 ---
 
