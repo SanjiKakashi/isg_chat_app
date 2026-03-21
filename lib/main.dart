@@ -7,10 +7,6 @@ import 'package:isg_chat_app/firebase_options.dart';
 import 'package:isg_chat_app/presentation/bindings/app_binding.dart';
 import 'package:isg_chat_app/routes/app_routes.dart';
 
-/// App entry point.
-///
-/// Initialises Firebase before [runApp] (FR-006) and delegates all
-/// routing to GetX named routes.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -27,10 +23,6 @@ Future<void> main() async {
   runApp(const IsgChatApp());
 }
 
-/// Root widget.
-///
-/// Uses [GetMaterialApp] to enable GetX navigation and snackbar support.
-/// The initial route is the Splash screen which decides where to go next.
 class IsgChatApp extends StatelessWidget {
   const IsgChatApp({super.key});
 

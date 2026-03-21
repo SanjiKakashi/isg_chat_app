@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:isg_chat_app/core/constants/app_constants.dart';
 import 'package:isg_chat_app/core/errors/failures.dart';
 import 'package:isg_chat_app/core/utils/app_logger.dart';
+import 'package:isg_chat_app/data/sources/remote/guest_migration_service.dart';
 import 'package:isg_chat_app/domain/entities/user_profile.dart';
 import 'package:isg_chat_app/domain/repositories/auth_repository.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -15,11 +16,14 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     required FirebaseAuth firebaseAuth,
     required GoogleSignIn googleSignIn,
+    required GuestMigrationService migrationService,
   })  : _firebaseAuth = firebaseAuth,
-        _googleSignIn = googleSignIn;
+        _googleSignIn = googleSignIn,
+        _migrationService = migrationService;
 
   final FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
+  final GuestMigrationService _migrationService;
 
   @override
   Future<({UserProfile? profile, Failure? failure})> signInWithGoogle() async {
@@ -129,6 +133,171 @@ class AuthRepositoryImpl implements AuthRepository {
     await Future.wait([_firebaseAuth.signOut(), _googleSignIn.signOut()]);
   }
 
+  @override
+  Future<({UserProfile? profile, Failure? failure})> signInAnonymously() async {
+    try {
+      final userCredential = await _firebaseAuth.signInAnonymously();
+      final profile = _profileFromCredential(
+        userCredential,
+        AppConstants.providerAnonymous,
+      );
+      AppLogger.instance.i('Anonymous sign-in: ${profile.uid}');
+      return (profile: profile, failure: null);
+    } on FirebaseAuthException catch (e) {
+      AppLogger.instance.e('Anonymous sign-in error', error: e);
+      return (profile: null, failure: AuthFailure(_friendlyAuthMessage(e.code)));
+    } on Exception catch (e) {
+      AppLogger.instance.e('Anonymous sign-in unexpected error', error: e);
+      return (
+        profile: null,
+        failure: const AuthFailure('Something went wrong. Please try again.'),
+      );
+    }
+  }
+
+  @override
+  Future<({UserProfile? profile, Failure? failure})> linkWithGoogle({
+    required String guestUid,
+  }) async {
+    try {
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        return (profile: null, failure: const CancelledFailure());
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final guestData = await _migrationService.fetchGuestData(guestUid);
+
+      UserCredential userCredential;
+      try {
+        userCredential =
+            await _firebaseAuth.currentUser!.linkWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use') {
+          AppLogger.instance.i('Google credential in use — signing in to merge');
+          userCredential =
+              await _firebaseAuth.signInWithCredential(credential);
+        } else {
+          rethrow;
+        }
+      }
+
+      final newUid = userCredential.user!.uid;
+      final profile =
+          _profileFromCredential(userCredential, AppConstants.providerGoogle);
+
+      await _migrationService.migrate(
+        guestUid: guestUid,
+        newUid: newUid,
+        guestData: guestData,
+      );
+
+      AppLogger.instance.i('Google link success: $newUid');
+      return (profile: profile, failure: null);
+    } on FirebaseAuthException catch (e) {
+      AppLogger.instance.e('Google link error', error: e);
+      return (profile: null, failure: LinkFailure(_friendlyAuthMessage(e.code)));
+    } on Exception catch (e) {
+      AppLogger.instance.e('Google link unexpected error', error: e);
+      return (
+        profile: null,
+        failure: const LinkFailure('Linking failed. Please try again.'),
+      );
+    }
+  }
+
+  @override
+  Future<({UserProfile? profile, Failure? failure})> linkWithApple({
+    required String guestUid,
+  }) async {
+    try {
+      final rawNonce = _generateNonce();
+      final nonce = _sha256OfString(rawNonce);
+
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: nonce,
+      );
+
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        rawNonce: rawNonce,
+      );
+
+      final guestData = await _migrationService.fetchGuestData(guestUid);
+
+      UserCredential userCredential;
+      try {
+        userCredential =
+            await _firebaseAuth.currentUser!.linkWithCredential(oauthCredential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use') {
+          AppLogger.instance.i('Apple credential in use — signing in to merge');
+          userCredential =
+              await _firebaseAuth.signInWithCredential(oauthCredential);
+        } else {
+          rethrow;
+        }
+      }
+
+      final appleDisplayName = [
+        appleCredential.givenName,
+        appleCredential.familyName,
+      ].where((s) => s != null && s.isNotEmpty).join(' ');
+
+      final firebaseUser = userCredential.user!;
+      if (appleDisplayName.isNotEmpty &&
+          (firebaseUser.displayName == null ||
+              firebaseUser.displayName!.isEmpty)) {
+        await firebaseUser.updateDisplayName(appleDisplayName);
+        await firebaseUser.reload();
+      }
+
+      final profile = _profileFromCredential(
+        userCredential,
+        AppConstants.providerApple,
+        overrideDisplayName:
+            appleDisplayName.isNotEmpty ? appleDisplayName : null,
+      );
+
+      final newUid = userCredential.user!.uid;
+      await _migrationService.migrate(
+        guestUid: guestUid,
+        newUid: newUid,
+        guestData: guestData,
+      );
+
+      AppLogger.instance.i('Apple link success: $newUid');
+      return (profile: profile, failure: null);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return (profile: null, failure: const CancelledFailure());
+      }
+      AppLogger.instance.e('Apple link error', error: e);
+      return (
+        profile: null,
+        failure: const LinkFailure('Apple Sign-In failed. Please try again.'),
+      );
+    } on FirebaseAuthException catch (e) {
+      AppLogger.instance.e('Apple link Firebase error', error: e);
+      return (profile: null, failure: LinkFailure(_friendlyAuthMessage(e.code)));
+    } on Exception catch (e) {
+      AppLogger.instance.e('Apple link unexpected error', error: e);
+      return (
+        profile: null,
+        failure: const LinkFailure('Linking failed. Please try again.'),
+      );
+    }
+  }
+
   UserProfile _profileFromCredential(
     UserCredential credential,
     String provider, {
@@ -161,6 +330,8 @@ class AuthRepositoryImpl implements AuthRepository {
         return 'This account has been disabled.';
       case 'account-exists-with-different-credential':
         return 'An account already exists with a different sign-in method.';
+      case 'admin-restricted-operation':
+        return 'Guest sign-in is not enabled for this app. Please sign in with Google or Apple.';
       default:
         return 'Sign-in failed. Please try again.';
     }

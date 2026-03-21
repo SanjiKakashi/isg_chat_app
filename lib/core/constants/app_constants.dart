@@ -42,6 +42,7 @@ class AppConstants {
 
   static const String providerGoogle = 'google';
   static const String providerApple = 'apple';
+  static const String providerAnonymous = 'anonymous';
 
   static const String configCollection = 'config';
   static const String configOpenAiDoc = 'openai';

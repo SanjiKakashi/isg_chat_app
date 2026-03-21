@@ -198,6 +198,22 @@ class _SignInSection extends StatelessWidget {
             onPressed: loading ? null : controller.signInWithGoogle,
             isLoading: loading,
           ),
+          const SizedBox(height: 20),
+          const DividerWithLabel(),
+          const SizedBox(height: 16),
+          SignInButton(
+            label: 'Continue as Guest',
+            onPressed: loading ? null : controller.signInAnonymously,
+            isLoading: loading,
+            icon: const Icon(
+              Icons.person_outline_rounded,
+              size: 22,
+              color: AppTheme.textSecondary,
+            ),
+            backgroundColor: Colors.transparent,
+            foregroundColor: AppTheme.textSecondary,
+            borderColor: AppTheme.divider,
+          ),
         ],
       );
     });

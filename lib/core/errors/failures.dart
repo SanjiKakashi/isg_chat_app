@@ -24,6 +24,12 @@ class NetworkFailure extends Failure {
   const NetworkFailure() : super('No internet connection. Please try again.');
 }
 
+/// Credential-linking failure.
+class LinkFailure extends Failure {
+  const LinkFailure(super.message, {this.credentialAlreadyInUse = false});
+  final bool credentialAlreadyInUse;
+}
+
 /// Failure — carries the HTTP [statusCode] for precise handling.
 class AiFailure extends Failure {
   const AiFailure(super.message, {required this.statusCode});
