@@ -77,6 +77,11 @@ class GuestMigrationService {
       return;
     }
 
+    if (guestUid == newUid) {
+      AppLogger.instance.i('migrate: same UID after linking — no move needed');
+      return;
+    }
+
     final db =
         _firestore.collection(AppConstants.usersCollection).firestore;
 

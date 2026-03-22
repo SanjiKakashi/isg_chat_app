@@ -75,3 +75,12 @@ class _AiStreamFinished extends ChatEvent {
   const _AiStreamFinished();
 }
 
+class _ChatAiTimeout extends ChatEvent {
+  const _ChatAiTimeout(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  List<Object?> get props => [conversationId];
+}
+

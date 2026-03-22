@@ -33,6 +33,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ConversationsUpdated>(_onConversationsUpdated);
     on<_MessagesUpdated>(_onMessagesUpdated);
     on<_AiStreamFinished>(_onAiStreamFinished);
+    on<_ChatAiTimeout>(_onAiTimeout);
   }
 
   final ConversationRepository _repo;
@@ -43,6 +44,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<List<ChatMessage>>? _messagesSub;
   StreamSubscription<String>? _aiStreamSub;
   String? _pendingAiMessageId;
+  Timer? _generationTimer;
 
   Future<void> _onInitialize(
     ChatInitialize event,
@@ -162,6 +164,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (_pendingAiMessageId == null) return;
 
+    _generationTimer?.cancel();
+    _generationTimer = null;
+
     await _aiStreamSub?.cancel();
     _aiStreamSub = null;
 
@@ -231,6 +236,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _AiStreamFinished event,
     Emitter<ChatState> emit,
   ) {
+    _generationTimer?.cancel();
+    _generationTimer = null;
+
     final currentState = state;
     if (currentState is ChatReady) {
       emit(currentState.copyWith(isGenerating: false));
@@ -284,6 +292,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ChatMessage> messages,
   }) {
     final buffer = StringBuffer();
+
+    _generationTimer?.cancel();
+    _generationTimer = Timer(
+      const Duration(seconds: 10),
+      () => add(_ChatAiTimeout(conversationId)),
+    );
 
     _aiStreamSub = _ai.streamCompletion(messages).listen(
       (chunk) async {
@@ -350,8 +364,46 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  /// Fires when generation has been running for 60 s with no completion.
+  Future<void> _onAiTimeout(
+    _ChatAiTimeout event,
+    Emitter<ChatState> emit,
+  ) async {
+    _generationTimer = null;
+
+    await _aiStreamSub?.cancel();
+    _aiStreamSub = null;
+
+    final pendingId = _pendingAiMessageId;
+    _pendingAiMessageId = null;
+
+    if (pendingId != null) {
+      try {
+        await _repo.updateMessage(
+          userId: _user.uid,
+          conversationId: event.conversationId,
+          messageId: pendingId,
+          status: AppConstants.statusCancelled,
+          message: 'Response timed out. Please try again.',
+        );
+      } on Exception catch (e) {
+        AppLogger.instance.e('_onAiTimeout updateMessage failed', error: e);
+      }
+    }
+
+    final currentState = state;
+    if (currentState is ChatReady) {
+      emit(currentState.copyWith(isGenerating: false));
+    }
+
+    _listenMessages(event.conversationId);
+
+    AppLogger.instance.w('Generation timed out for conv ${event.conversationId}');
+  }
+
   @override
   Future<void> close() async {
+    _generationTimer?.cancel();
     await _conversationsSub?.cancel();
     await _messagesSub?.cancel();
     await _aiStreamSub?.cancel();

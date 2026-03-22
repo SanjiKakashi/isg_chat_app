@@ -53,6 +53,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
                       color: AppTheme.textPrimary,
                       fontSize: 15,
                     ),
+                    textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       hintText: generating ? 'Generating…' : 'Ask anything…',
                       hintStyle: const TextStyle(color: AppTheme.textSecondary),
