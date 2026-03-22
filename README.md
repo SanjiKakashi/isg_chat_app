@@ -39,12 +39,33 @@ A Flutter ChatGPT wrapper using Firebase, BLoC, and SOLID principles. It include
 
 ### Prerequisites
 
-- Flutter SDK installed
+- Flutter SDK installed (Stable - 3.55.3)
 - Android Studio / VS Code
 - Xcode (for iOS - optional)
 
 ---
 
+## 🧠 Development Approach
+
+Some parts of the app were built using a **spec-driven approach** — meaning the flow and states were defined before implementation.
+
+This helped in:
+- Keeping BLoC logic clean and predictable
+- Handling chat streaming states properly (sending → generating → done/cancelled)
+- Managing edge cases in authentication and error handling
+
+---
+
+## 🤖 AI Assistance
+
+Some parts of the development were assisted using **Generative AI tools** for:
+- Exploring implementation approaches
+- Improving code structure and readability
+- Speeding up development of non-critical components
+
+All core logic, architecture, and integrations were implemented and verified manually.
+
+---
 ## Tech Stack
 
 | | Package |
