@@ -20,12 +20,53 @@ class MessageBubble extends StatelessWidget {
         children: [
           if (!isUser) _AiAvatar(),
           if (!isUser) const SizedBox(width: 8),
-          Flexible(child: _BubbleBody(message: message, isUser: isUser)),
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                _BubbleBody(message: message, isUser: isUser),
+                const SizedBox(height: 3),
+                Text(
+                  _formatTimestamp(message.timestamp),
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
           if (isUser) const SizedBox(width: 8),
           if (isUser) _UserAvatar(),
         ],
       ),
     );
+  }
+
+  /// Returns HH:mm for today's messages, or "MMM d  HH:mm" for older ones.
+  static String _formatTimestamp(DateTime dt) {
+    final now = DateTime.now();
+    final isToday =
+        dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    if (isToday) return '$hh:$mm';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}  $hh:$mm';
   }
 }
 
@@ -50,14 +91,12 @@ class _BubbleBody extends StatelessWidget {
           bottomLeft: Radius.circular(isUser ? 18 : 4),
           bottomRight: Radius.circular(isUser ? 4 : 18),
         ),
-        border: isUser
-            ? null
-            : Border.all(color: AppTheme.divider, width: 1),
+        border: isUser ? null : Border.all(color: AppTheme.divider, width: 1),
       ),
       child: isGenerating
           ? _TypingIndicator()
           : Text(
-              isCancelled ? message.message : message.message,
+              message.message,
               style: TextStyle(
                 color: isUser
                     ? Colors.white
@@ -136,8 +175,7 @@ class _AiAvatar extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: const Icon(Icons.auto_awesome_rounded,
-          color: Colors.white, size: 16),
+      child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
     );
   }
 }
@@ -152,8 +190,7 @@ class _UserAvatar extends StatelessWidget {
         color: AppTheme.primary.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: const Icon(Icons.person_rounded,
-          color: AppTheme.primary, size: 18),
+      child: const Icon(Icons.person_rounded, color: AppTheme.primary, size: 18),
     );
   }
 }

@@ -1,13 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:isg_chat_app/core/theme/app_theme.dart';
-import 'package:isg_chat_app/presentation/controllers/chat_controller.dart';
+import 'package:isg_chat_app/presentation/blocs/chat/chat_bloc.dart';
 
-/// Input bar with send/cancel button that reacts to [ChatController.isGenerating].
-class ChatInputBar extends StatelessWidget {
-  const ChatInputBar({super.key, required this.controller});
+/// Input bar with send/cancel button that reacts to [ChatBloc.isGenerating].
+class ChatInputBar extends StatefulWidget {
+  const ChatInputBar({super.key});
 
-  final ChatController controller;
+  @override
+  State<ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<ChatInputBar> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _send(BuildContext context) {
+    final text = _controller.text;
+    if (text.trim().isEmpty) return;
+    context.read<ChatBloc>().add(ChatSendMessage(text));
+    _controller.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,17 +37,18 @@ class ChatInputBar extends StatelessWidget {
           color: AppTheme.backgroundCard,
           border: Border(top: BorderSide(color: AppTheme.divider)),
         ),
-        child: Obx(
-          () {
-            final generating = controller.isGenerating.value;
+        child: BlocBuilder<ChatBloc, ChatState>(
+          builder: (context, state) {
+            final generating = state is ChatReady && state.isGenerating;
             return Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: controller.inputController,
+                    controller: _controller,
+                    onSubmitted: (_) => _send(context),
                     enabled: !generating,
                     maxLines: null,
-                    textInputAction: TextInputAction.newline,
+                    textInputAction: TextInputAction.go,
                     style: const TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 15,
@@ -51,7 +70,7 @@ class ChatInputBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _ActionButton(controller: controller, generating: generating),
+                _ActionButton(generating: generating),
               ],
             );
           },
@@ -62,12 +81,8 @@ class ChatInputBar extends StatelessWidget {
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.controller,
-    required this.generating,
-  });
+  const _ActionButton({required this.generating});
 
-  final ChatController controller;
   final bool generating;
 
   @override
@@ -81,14 +96,19 @@ class _ActionButton extends StatelessWidget {
               key: const ValueKey('cancel'),
               icon: Icons.stop_rounded,
               color: Colors.redAccent,
-              onTap: controller.cancelGeneration,
+              onTap: () =>
+                  context.read<ChatBloc>().add(const ChatCancelGeneration()),
               tooltip: 'Cancel',
             )
           : _CircleButton(
               key: const ValueKey('send'),
               icon: Icons.send_rounded,
               color: AppTheme.primary,
-              onTap: () => controller.sendMessage(controller.inputController.text),
+              onTap: () {
+                final state =
+                    context.findAncestorStateOfType<_ChatInputBarState>();
+                state?._send(context);
+              },
               tooltip: 'Send',
             ),
     );

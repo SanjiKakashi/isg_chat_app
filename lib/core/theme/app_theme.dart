@@ -24,7 +24,7 @@ class AppTheme {
     stops: [0.0, 0.5, 1.0],
   );
 
-  /// Dark [ThemeData] passed to [GetMaterialApp.theme].
+  /// Dark [ThemeData] passed to [MaterialApp.theme].
   static ThemeData get darkTheme => ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,

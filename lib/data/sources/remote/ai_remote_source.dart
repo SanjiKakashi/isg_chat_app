@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:isg_chat_app/core/errors/failures.dart';
 import 'package:isg_chat_app/core/network/ai_config.dart';
@@ -53,7 +54,7 @@ class AiRemoteSource {
     final lineBuffer = StringBuffer();
 
     await for (final chunk in response.stream.transform(utf8.decoder)) {
-      print(chunk);
+      debugPrint(chunk);
       lineBuffer.write(chunk);
 
       while (lineBuffer.toString().contains('\n')) {

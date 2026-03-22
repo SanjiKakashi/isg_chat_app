@@ -1,10 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:isg_chat_app/core/theme/app_theme.dart';
+import 'package:isg_chat_app/di/service_locator.dart';
 import 'package:isg_chat_app/firebase_options.dart';
-import 'package:isg_chat_app/presentation/bindings/app_binding.dart';
+import 'package:isg_chat_app/presentation/blocs/auth/auth_bloc.dart';
 import 'package:isg_chat_app/routes/app_routes.dart';
 
 Future<void> main() async {
@@ -19,6 +20,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await setupServiceLocator();
 
   runApp(const IsgChatApp());
 }
@@ -28,14 +30,23 @@ class IsgChatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(
-      title: 'ISG Chat',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      initialBinding: AppBinding(),
-      initialRoute: AppRoutes.splash,
-      getPages: AppRoutes.pages,
-      defaultTransition: Transition.fadeIn,
+    return BlocProvider<AuthBloc>(
+      create: (_) => AuthBloc(
+        signInWithGoogleUseCase: sl(),
+        signInWithAppleUseCase: sl(),
+        getCurrentUserUseCase: sl(),
+        signInAnonymouslyUseCase: sl(),
+        linkWithGoogleUseCase: sl(),
+        linkWithAppleUseCase: sl(),
+        authRepository: sl(),
+      )..add(const AuthCheckSession()),
+      child: MaterialApp(
+        title: 'ISG Chat',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        initialRoute: AppRoutes.splash,
+        onGenerateRoute: AppRouter.generateRoute,
+      ),
     );
   }
 }

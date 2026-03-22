@@ -73,6 +73,9 @@ class ConversationRemoteSource {
       status: status,
     );
     final ref = await _messagesRef(userId, conversationId).add(model.toJson());
+    await _conversationsRef(userId)
+        .doc(conversationId)
+        .update({AppConstants.fieldLastMessageAt: now});
     AppLogger.instance.i('Message added: ${ref.id}');
     return ref.id;
   }

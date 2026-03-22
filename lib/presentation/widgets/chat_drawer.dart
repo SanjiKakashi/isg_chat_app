@@ -1,42 +1,47 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:isg_chat_app/core/theme/app_theme.dart';
 import 'package:isg_chat_app/domain/entities/conversation.dart';
-import 'package:isg_chat_app/presentation/controllers/auth_controller.dart';
-import 'package:isg_chat_app/presentation/controllers/chat_controller.dart';
+import 'package:isg_chat_app/presentation/blocs/auth/auth_bloc.dart';
+import 'package:isg_chat_app/presentation/blocs/chat/chat_bloc.dart';
 
 /// Left-side drawer showing conversation history and a new-chat button.
 class ChatDrawer extends StatelessWidget {
-  const ChatDrawer({super.key, required this.controller});
-
-  final ChatController controller;
+  const ChatDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final auth = Get.find<AuthController>();
-
     return Drawer(
       backgroundColor: AppTheme.backgroundCard,
-      child: Obx(() {
-        final user = auth.currentUser.value;
-        return Column(
-          children: [
-            _DrawerHeader(
-              displayName: user?.nameOrFallback ?? 'User',
-              email: user?.email ?? '',
-              photoUrl: user?.photoUrl,
-            ),
-            _NewChatButton(onTap: controller.startNewConversation),
-            if (user?.isGuest ?? false) _LinkAccountSection(auth: auth),
-            const Divider(color: AppTheme.divider, height: 1),
-            Expanded(child: _ConversationList(controller: controller)),
-            const Divider(color: AppTheme.divider, height: 1),
-            _SignOutTile(onTap: auth.signOut),
-          ],
-        );
-      }),
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, authState) {
+          final user = authState is AuthAuthenticated ? authState.user : null;
+          return Column(
+            children: [
+              _DrawerHeader(
+                displayName: user?.nameOrFallback ?? 'User',
+                email: user?.email ?? '',
+                photoUrl: user?.photoUrl,
+              ),
+              _NewChatButton(
+                onTap: () {
+                  context.read<ChatBloc>().add(const ChatStartNewConversation());
+                  Navigator.of(context).pop();
+                },
+              ),
+              if (user?.isGuest ?? false) const _LinkAccountSection(),
+              const Divider(color: AppTheme.divider, height: 1),
+              const Expanded(child: _ConversationList()),
+              const Divider(color: AppTheme.divider, height: 1),
+              _SignOutTile(
+                onTap: () => context.read<AuthBloc>().add(const AuthSignOut()),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -150,9 +155,7 @@ class _NewChatButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppTheme.primary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppTheme.primary.withValues(alpha: 0.4),
-            ),
+            border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4)),
           ),
           child: const Row(
             children: [
@@ -175,32 +178,41 @@ class _NewChatButton extends StatelessWidget {
 }
 
 class _ConversationList extends StatelessWidget {
-  const _ConversationList({required this.controller});
-
-  final ChatController controller;
+  const _ConversationList();
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final list = controller.conversations;
-      if (list.isEmpty) {
-        return const Center(
-          child: Text(
-            'No previous conversations',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+    return BlocBuilder<ChatBloc, ChatState>(
+      builder: (context, state) {
+        final conversations =
+            state is ChatReady ? state.conversations : <Conversation>[];
+        final activeId = state is ChatReady ? state.conversationId : '';
+
+        if (conversations.isEmpty) {
+          return const Center(
+            child: Text(
+              'No previous conversations',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: conversations.length,
+          itemBuilder: (_, i) => _ConversationTile(
+            conversation: conversations[i],
+            isActive: conversations[i].id == activeId,
+            onTap: () {
+              context
+                  .read<ChatBloc>()
+                  .add(ChatLoadConversation(conversations[i].id));
+              Navigator.of(context).pop();
+            },
           ),
         );
-      }
-      return ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: list.length,
-        itemBuilder: (_, i) => _ConversationTile(
-          conversation: list[i],
-          isActive: list[i].id == controller.conversationId.value,
-          onTap: () => controller.loadConversation(list[i].id),
-        ),
-      );
-    });
+      },
+    );
   }
 }
 
@@ -280,73 +292,77 @@ class _SignOutTile extends StatelessWidget {
 }
 
 class _LinkAccountSection extends StatelessWidget {
-  const _LinkAccountSection({required this.auth});
-
-  final AuthController auth;
+  const _LinkAccountSection();
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final linking = auth.isLinking.value;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 14, 20, 4),
-            child: Text(
-              'UPGRADE ACCOUNT',
-              style: TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, state) {
+        final linking = state is AuthLinkInProgress;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 14, 20, 4),
+              child: Text(
+                'UPGRADE ACCOUNT',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
               ),
             ),
-          ),
-          ListTile(
-            enabled: !linking,
-            onTap: linking ? null : auth.linkWithGoogle,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-            leading: linking
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppTheme.primary,
-                    ),
-                  )
-                : const Icon(
-                    Icons.account_circle_rounded,
-                    color: AppTheme.primary,
-                    size: 20,
-                  ),
-            title: const Text(
-              'Link with Google',
-              style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
-            ),
-          ),
-          if (Platform.isIOS)
             ListTile(
               enabled: !linking,
-              onTap: linking ? null : auth.linkWithApple,
+              onTap: linking
+                  ? null
+                  : () => context.read<AuthBloc>().add(const AuthLinkWithGoogle()),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-              leading: const Icon(
-                Icons.apple_rounded,
-                color: AppTheme.textPrimary,
-                size: 20,
-              ),
+              leading: linking
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.primary,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.account_circle_rounded,
+                      color: AppTheme.primary,
+                      size: 20,
+                    ),
               title: const Text(
-                'Link with Apple',
+                'Link with Google',
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
               ),
             ),
-          const SizedBox(height: 8),
-        ],
-      );
-    });
+            if (Platform.isIOS)
+              ListTile(
+                enabled: !linking,
+                onTap: linking
+                    ? null
+                    : () => context.read<AuthBloc>().add(const AuthLinkWithApple()),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                leading: const Icon(
+                  Icons.apple_rounded,
+                  color: AppTheme.textPrimary,
+                  size: 20,
+                ),
+                title: const Text(
+                  'Link with Apple',
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
   }
 }
 

@@ -1,51 +1,50 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:isg_chat_app/core/theme/app_theme.dart';
-import 'package:isg_chat_app/presentation/controllers/auth_controller.dart';
+import 'package:isg_chat_app/presentation/blocs/auth/auth_bloc.dart';
 import 'package:isg_chat_app/presentation/widgets/sign_in_button.dart';
+import 'package:isg_chat_app/routes/app_routes.dart';
 
-/// Premium Login screen (FR-001, FR-002, FR-011).
-///
-/// Displays:
-/// - Full-bleed dark gradient background
-/// - Centred app branding (logo + tagline)
-/// - "Continue with Google" button (always shown)
-/// - "Sign in with Apple" button (iOS only — FR-002)
-/// - No other inputs or navigation elements
-///
-/// All taps delegate to [AuthController]; zero Firebase references here.
+/// Login screen with Google / Apple / Guest sign-in.
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<AuthController>();
-    final bool isIos = Platform.isIOS;
-
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.loginGradient),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              children: [
-                const Spacer(flex: 3),
-                // ── Branding ──────────────────────────────────────────────
-                _BrandingSection(),
-                const Spacer(flex: 2),
-                // ── Feature bullets ───────────────────────────────────────
-                _FeatureHighlights(),
-                const Spacer(flex: 3),
-                // ── Sign-in buttons ───────────────────────────────────────
-                _SignInSection(controller: controller, isIos: isIos),
-                const SizedBox(height: 12),
-                // ── Legal footer ──────────────────────────────────────────
-                _LegalFooter(),
-                const SizedBox(height: 20),
-              ],
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthAuthenticated) {
+          AppRouter.pushReplaceAll(context, AppRoutes.chat);
+        } else if (state is AuthError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(gradient: AppTheme.loginGradient),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                children: [
+                  const Spacer(flex: 3),
+                  _BrandingSection(),
+                  const Spacer(flex: 2),
+                  _FeatureHighlights(),
+                  const Spacer(flex: 3),
+                  _SignInSection(isIos: Platform.isIOS),
+                  const SizedBox(height: 12),
+                  _LegalFooter(),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
         ),
@@ -54,15 +53,12 @@ class LoginPage extends StatelessWidget {
   }
 }
 
-// ── Sub-widgets ───────
-
 class _BrandingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Logo mark with glow
         Container(
           width: 96,
           height: 96,
@@ -168,55 +164,57 @@ class _FeaturePill extends StatelessWidget {
 }
 
 class _SignInSection extends StatelessWidget {
-  const _SignInSection({
-    required this.controller,
-    required this.isIos,
-  });
+  const _SignInSection({required this.isIos});
 
-  final AuthController controller;
   final bool isIos;
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final loading = controller.isLoading.value;
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Apple Sign-In (iOS only — FR-002) ────────────────────────
-          if (isIos) ...[
-            AppleSignInButton(
-              onPressed: loading ? null : controller.signInWithApple,
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, state) {
+        final loading = state is AuthLoading;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isIos) ...[
+              AppleSignInButton(
+                onPressed: loading
+                    ? null
+                    : () => context.read<AuthBloc>().add(const AuthSignInWithApple()),
+                isLoading: loading,
+              ),
+              const SizedBox(height: 14),
+              const DividerWithLabel(),
+              const SizedBox(height: 14),
+            ],
+            GoogleSignInButton(
+              onPressed: loading
+                  ? null
+                  : () => context.read<AuthBloc>().add(const AuthSignInWithGoogle()),
               isLoading: loading,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 20),
             const DividerWithLabel(),
-            const SizedBox(height: 14),
-          ],
-          // ── Google Sign-In (always shown) ────────────────────────────
-          GoogleSignInButton(
-            onPressed: loading ? null : controller.signInWithGoogle,
-            isLoading: loading,
-          ),
-          const SizedBox(height: 20),
-          const DividerWithLabel(),
-          const SizedBox(height: 16),
-          SignInButton(
-            label: 'Continue as Guest',
-            onPressed: loading ? null : controller.signInAnonymously,
-            isLoading: loading,
-            icon: const Icon(
-              Icons.person_outline_rounded,
-              size: 22,
-              color: AppTheme.textSecondary,
+            const SizedBox(height: 16),
+            SignInButton(
+              label: 'Continue as Guest',
+              onPressed: loading
+                  ? null
+                  : () => context.read<AuthBloc>().add(const AuthSignInAnonymously()),
+              isLoading: loading,
+              icon: const Icon(
+                Icons.person_outline_rounded,
+                size: 22,
+                color: AppTheme.textSecondary,
+              ),
+              backgroundColor: Colors.transparent,
+              foregroundColor: AppTheme.textSecondary,
+              borderColor: AppTheme.divider,
             ),
-            backgroundColor: Colors.transparent,
-            foregroundColor: AppTheme.textSecondary,
-            borderColor: AppTheme.divider,
-          ),
-        ],
-      );
-    });
+          ],
+        );
+      },
+    );
   }
 }
 

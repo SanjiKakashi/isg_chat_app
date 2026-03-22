@@ -1,6 +1,6 @@
 # ISG Chat App
 
-A Flutter ChatGPT wrapper using Firebase, GetX, and SOLID principles. It includes authentication, chat functionality, and basic user session handling.
+A Flutter ChatGPT wrapper using Firebase, BLoC, and SOLID principles. It includes authentication, chat functionality, and basic user session handling.
 ---
 
 ## ✅ Completed Features
@@ -49,7 +49,8 @@ A Flutter ChatGPT wrapper using Firebase, GetX, and SOLID principles. It include
 
 | | Package |
 |---|---|
-| State / Navigation | `get` |
+| State Management | `flutter_bloc`, `equatable` |
+| DI | `get_it` |
 | Auth | `firebase_auth`, `google_sign_in`, `sign_in_with_apple` |
 | Database | `cloud_firestore` |
 | AI | `http` (OpenAI SSE streaming) |
@@ -57,16 +58,30 @@ A Flutter ChatGPT wrapper using Firebase, GetX, and SOLID principles. It include
 
 ---
 
-## State Management (GetX)
+## State Management (BLoC)
 
-| Observable | Type | Purpose |
-|------------|------|---------|
-| `isLoading` | `RxBool` | Splash/login spinner |
-| `currentUser` | `Rxn<UserProfile>` | Signed-in user |
-| `messages` | `RxList<ChatMessage>` | Live message list |
-| `conversations` | `RxList<Conversation>` | Drawer list |
-| `conversationId` | `RxString` | Active conversation |
-| `isGenerating` | `RxBool` | Disables input / toggles Send↔Cancel |
+### AuthBloc
+
+| State | Meaning |
+|-------|---------|
+| `AuthInitial` | Before session check |
+| `AuthLoading` | Sign-in or session check in progress |
+| `AuthAuthenticated(user)` | Signed-in user with profile |
+| `AuthUnauthenticated` | No active session |
+| `AuthError(message)` | Sign-in failed |
+| `AuthLinkInProgress(user)` | Account linking in progress |
+| `AuthLinkSuccess(user)` | Link succeeded (transient) |
+| `AuthLinkFailure(message, user)` | Link failed (transient) |
+
+### ChatBloc
+
+| State field | Type | Purpose |
+|-------------|------|---------|
+| `ChatLoading` | state | Initial load spinner |
+| `ChatReady.messages` | `List<ChatMessage>` | Live message list |
+| `ChatReady.conversations` | `List<Conversation>` | Drawer list |
+| `ChatReady.conversationId` | `String` | Active conversation |
+| `ChatReady.isGenerating` | `bool` | Disables input / toggles Send↔Cancel |
 
 ---
 

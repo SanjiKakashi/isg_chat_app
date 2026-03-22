@@ -1,39 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:isg_chat_app/core/theme/app_theme.dart';
-import 'package:isg_chat_app/presentation/controllers/auth_controller.dart';
+import 'package:isg_chat_app/presentation/blocs/auth/auth_bloc.dart';
+import 'package:isg_chat_app/routes/app_routes.dart';
 
-/// Branded splash/loading screen shown while the auth session is being
-/// determined on cold-start (FR-006, US3-AC3).
-///
-/// The [AuthController.onReady] callback drives the navigation decision;
-/// this page purely renders a loading indicator.
+/// Branded splash shown while [AuthBloc] resolves the session.
 class SplashPage extends StatelessWidget {
   const SplashPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Ensure controller is initialised (created by AuthBinding).
-    Get.find<AuthController>();
-
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.loginGradient),
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _AppLogoMark(),
-              SizedBox(height: 40),
-              SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthAuthenticated) {
+          AppRouter.pushReplaceAll(context, AppRoutes.chat);
+        } else if (state is AuthUnauthenticated) {
+          AppRouter.pushReplaceAll(context, AppRoutes.login);
+        }
+      },
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(gradient: AppTheme.loginGradient),
+          child: const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _AppLogoMark(),
+                SizedBox(height: 40),
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
