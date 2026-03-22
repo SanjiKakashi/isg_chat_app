@@ -25,6 +25,8 @@ A Flutter ChatGPT wrapper using Firebase, BLoC, and SOLID principles. It include
     - Current usage is restricted to a **$5 API limit**
     - Higher models (like GPT-4/5) were not used to avoid exceeding budget
 
+- Conversation history may not appear immediately after linking a guest account to Google
+
 ---
 
 ## 🛠️ TODO / Improvements
@@ -33,7 +35,6 @@ A Flutter ChatGPT wrapper using Firebase, BLoC, and SOLID principles. It include
 - Retry / Stop generation actions
 - Prompt suggestions or system prompts
 - Dark mode support
-- Responsive layout improvements
 
 ---
 
